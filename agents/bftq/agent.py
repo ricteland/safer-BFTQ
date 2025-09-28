@@ -63,12 +63,12 @@ class BFTQAgent:
     def act(self, state):
         """
         Choose action using exploration_technique
-        """"
+        """
         #TODO: call exploration utils
         pass
 
     def update(self, batch):
-        """"
+        """
         Perform BFTQ update
         batch = (s, a, r, c, budget, s')
         """
