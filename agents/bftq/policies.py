@@ -56,7 +56,6 @@ class PytorchBudgetedFittedPolicy(BudgetedPolicy):
     def __init__(self, network, betas_for_discretisation, device, hull_options, clamp_qc=None, np_random=np.random):
         self.betas_for_discretisation = betas_for_discretisation
         self.device = device
-        self.network = None
         self.hull_options = hull_options
         self.clamp_qc = clamp_qc
         self.np_random = np_random
