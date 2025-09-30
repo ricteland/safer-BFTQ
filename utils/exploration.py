@@ -43,6 +43,88 @@ class DiscreteDistribution(Configurable, ABC):
         pass
 
 
+class Boltzmann(DiscreteDistribution):
+    """
+        Uniform distribution with probability epsilon, and optimal action with probability 1-epsilon
+    """
+
+    def __init__(self, action_space, config=None):
+        super(Boltzmann, self).__init__(config)
+        self.action_space = action_space
+        if not isinstance(self.action_space, spaces.Discrete):
+            raise TypeError("The action space should be discrete")
+        self.values = None
+        self.seed()
+
+    @classmethod
+    def default_config(cls):
+        return dict(temperature=0.5)
+
+    def get_distribution(self):
+        actions = range(self.action_space.n)
+        if self.config['temperature'] > 0:
+            weights = np.exp(self.values / self.config['temperature'])
+        else:
+            weights = np.zeros((len(actions),))
+            weights[np.argmax(self.values)] = 1
+        return {action: weights[action] / np.sum(weights) for action in actions}
+
+    def update(self, values):
+        self.values = values
+
+
+class Greedy(DiscreteDistribution):
+    """
+        Always use the optimal action
+    """
+
+    def __init__(self, action_space, config=None):
+        super(Greedy, self).__init__(config)
+        self.action_space = action_space
+        if isinstance(self.action_space, spaces.Tuple):
+            self.action_space = self.action_space.spaces[0]
+        if not isinstance(self.action_space, spaces.Discrete):
+            raise TypeError("The action space should be discrete")
+        self.values = None
+        self.seed()
+
+    def get_distribution(self):
+        optimal_action = np.argmax(self.values)
+        return {action: 1 if action == optimal_action else 0 for action in range(self.action_space.n)}
+
+    def update(self, values):
+        self.values = values
+
+class Boltzmann(DiscreteDistribution):
+    """
+        Uniform distribution with probability epsilon, and optimal action with probability 1-epsilon
+    """
+
+    def __init__(self, action_space, config=None):
+        super(Boltzmann, self).__init__(config)
+        self.action_space = action_space
+        if not isinstance(self.action_space, spaces.Discrete):
+            raise TypeError("The action space should be discrete")
+        self.values = None
+        self.seed()
+
+    @classmethod
+    def default_config(cls):
+        return dict(temperature=0.5)
+
+    def get_distribution(self):
+        actions = range(self.action_space.n)
+        if self.config['temperature'] > 0:
+            weights = np.exp(self.values / self.config['temperature'])
+        else:
+            weights = np.zeros((len(actions),))
+            weights[np.argmax(self.values)] = 1
+        return {action: weights[action] / np.sum(weights) for action in actions}
+
+    def update(self, values):
+        self.values = values
+
+
 def exploration_factory(exploration_config, action_space):
     """
         Handles creation of exploration policies
@@ -50,9 +132,6 @@ def exploration_factory(exploration_config, action_space):
     :param action_space: the environment action space
     :return: a new exploration policy
     """
-    from rl_agents.agents.common.exploration.boltzmann import Boltzmann
-    from rl_agents.agents.common.exploration.epsilon_greedy import EpsilonGreedy
-    from rl_agents.agents.common.exploration.greedy import Greedy
 
     if exploration_config['method'] == 'Greedy':
         return Greedy(action_space, exploration_config)
