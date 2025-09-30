@@ -28,27 +28,27 @@ class BudgetedQNet(nn.Module):
         q_c = out[:, self.size_action:]
         return q_r, q_c
 
+def test():
+    # ==== Configuration ====
+    batch_size = 4
+    state_dim = 5       # e.g. 5 features
+    n_actions = 3       # number of actions
+    hidden_sizes = [32, 32]   # two hidden layers with 32 units
 
-# ==== Configuration ====
-batch_size = 4
-state_dim = 5       # e.g. 5 features
-n_actions = 3       # number of actions
-hidden_sizes = [32, 32]   # two hidden layers with 32 units
+    # ==== Create model ====
+    net = BudgetedQNet(size_state=state_dim, layers=hidden_sizes, n_actions=n_actions)
+    print(net)
 
-# ==== Create model ====
-net = BudgetedQNet(size_state=state_dim, layers=hidden_sizes, n_actions=n_actions)
-print(net)
+    # ==== Create dummy input ====
+    states = torch.randn(batch_size, state_dim)  # [B, state_dim]
+    betas = torch.rand(batch_size, 1)            # [B, 1]
+    print("State shape:", states.shape)
+    print("Beta shape:", betas.shape)
 
-# ==== Create dummy input ====
-states = torch.randn(batch_size, state_dim)  # [B, state_dim]
-betas = torch.rand(batch_size, 1)            # [B, 1]
-print("State shape:", states.shape)
-print("Beta shape:", betas.shape)
+    # ==== Forward pass ====
+    q_r, q_c = net(states, betas)
 
-# ==== Forward pass ====
-q_r, q_c = net(states, betas)
-
-print("Q_r shape:", q_r.shape)   # [B, n_actions]
-print("Q_r:", q_r)
-print("Q_c shape:", q_c.shape)   # [B, n_actions]
-print("Q_c:", q_c)
+    print("Q_r shape:", q_r.shape)   # [B, n_actions]
+    print("Q_r:", q_r)
+    print("Q_c shape:", q_c.shape)   # [B, n_actions]
+    print("Q_c:", q_c)
