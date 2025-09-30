@@ -1,12 +1,91 @@
+# bftq.py
 import torch
-import numpy as np
-import logging
-from multiprocessing.pool import Pool
-from pathlib import Path
-
-logger = logging.getLogger(__name__)
+import torch.nn as nn
 
 class BFTQ:
+    def __init__(self, q_net, target_net, optimizer, replay_buffer, config, device="cpu"):
+        self.q_net = q_net
+        self.target_net = target_net
+        self.optimizer = optimizer
+        self.replay_buffer = replay_buffer
+        self.config = config
+        self.device = device
+        self.steps = 0
+        self.gamma = config.get("gamma", 0.99)
+        self.batch_size = config.get("batch_size", 32)
+        self.target_update = config.get("target_update", 100)
 
-    def __init__(self, config):
-        pass
+    def update(self):
+        if len(self.replay_buffer) < self.batch_size:
+            return None
+
+        transitions = self.replay_buffer.sample(self.batch_size)
+        state, action, reward, cost, beta, next_state, done = zip(*transitions)
+
+        # --- convert to tensors ---
+        state = torch.stack(state).to(self.device)
+        next_state = torch.stack(next_state).to(self.device)
+        action = torch.tensor(action, device=self.device).long()
+        reward = torch.tensor(reward, device=self.device).float()
+        cost = torch.tensor(cost, device=self.device).float()
+        beta = torch.tensor(beta, device=self.device).float().unsqueeze(1)
+        done = torch.tensor(done, device=self.device).float()
+
+        # --- forward pass ---
+        q_r, q_c = self.q_net(state, beta)
+
+        if getattr(self.q_net, "output_type", "q_values") == "q_values":
+            # pick the Q-values for the chosen action
+            q_r = q_r.gather(1, action.unsqueeze(1)).squeeze()
+            q_c = q_c.gather(1, action.unsqueeze(1)).squeeze()
+
+        elif self.q_net.output_type == "mean_std":
+            # q_r and q_c each contain [mean | std] concatenated
+            q_r_mean, q_r_std = torch.chunk(q_r, 2, dim=1)
+            q_c_mean, q_c_std = torch.chunk(q_c, 2, dim=1)
+
+            # pick the mean for the chosen action
+            q_r = q_r_mean.gather(1, action.unsqueeze(1)).squeeze()
+            q_c = q_c_mean.gather(1, action.unsqueeze(1)).squeeze()
+
+            # NOTE: std is available if you want to use it in loss or exploration
+            q_r_uncertainty = q_r_std.gather(1, action.unsqueeze(1)).squeeze()
+            q_c_uncertainty = q_c_std.gather(1, action.unsqueeze(1)).squeeze()
+
+        else:
+            raise ValueError(f"Unknown output_type {self.q_net.output_type}")
+
+        # --- target Q ---
+        with torch.no_grad():
+            next_q_r, next_q_c = self.target_net(next_state, beta)
+
+            if self.q_net.output_type == "q_values":
+                next_q_r = next_q_r.max(1)[0]
+                next_q_c = next_q_c.max(1)[0]
+
+            elif self.q_net.output_type == "mean_std":
+                next_q_r_mean, _ = torch.chunk(next_q_r, 2, dim=1)
+                next_q_c_mean, _ = torch.chunk(next_q_c, 2, dim=1)
+                next_q_r = next_q_r_mean.max(1)[0]
+                next_q_c = next_q_c_mean.max(1)[0]
+
+            else:
+                raise ValueError(f"Unknown output_type {self.q_net.output_type}")
+
+            target_q_r = reward + self.gamma * (1 - done) * next_q_r
+            target_q_c = cost + self.gamma * (1 - done) * next_q_c
+        # --- loss + update ---
+        loss_r = nn.MSELoss()(q_r, target_q_r)
+        loss_c = nn.MSELoss()(q_c, target_q_c)
+        loss = loss_r + loss_c
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        # --- sync target net ---
+        self.steps += 1
+        if self.steps % self.target_update == 0:
+            self.target_net.load_state_dict(self.q_net.state_dict())
+
+        return loss.item()
