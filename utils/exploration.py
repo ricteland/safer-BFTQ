@@ -114,3 +114,33 @@ class EpsilonGreedy(DiscreteDistribution):
 
     def set_writer(self, writer):
         self.writer = writer
+
+
+def test():
+
+    action_space = spaces.Discrete(4)
+    # ==== Config ====
+    config = {
+        "temperature": 1.0,  # initial epsilon
+        "final_temperature": 0.1,  # minimum epsilon
+        "tau": 100  # decay speed
+    }
+
+    # ==== Initialize ====
+    explorer = EpsilonGreedy(action_space, config)
+
+    # ==== Fake Q-values ====
+    q_values = [1.0, 2.0, 0.5, -1.0]  # the best action is index 1
+
+    # ==== Run for a few timesteps ====
+    for t in [0, 10, 50, 100, 200]:
+        explorer.set_time(t)
+        explorer.update(q_values)
+        dist = explorer.get_distribution()
+        print(f"\nTime {t}")
+        print("Epsilon:", explorer.epsilon)
+        print("Distribution:", dist)
+
+        # Sample actions 20 times to check empirical behavior
+        samples = [explorer.sample() for _ in range(20)]
+        print("Samples:", samples)
