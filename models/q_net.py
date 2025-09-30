@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class BudgetedQNet(nn.Module):
+    output_type = "q_values"
+
     def __init__(self, size_state, n_actions, layers = [64, 64]):
         super(BudgetedQNet, self).__init__()
         sizes = [size_state + 1] + layers  # +1 for beta
