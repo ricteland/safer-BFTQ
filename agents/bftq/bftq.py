@@ -1,6 +1,7 @@
 # bftq.py
 import torch
 import torch.nn as nn
+import numpy as np
 
 class BFTQ:
     def __init__(self, q_net, target_net, optimizer, replay_buffer, config, device="cpu"):
@@ -22,16 +23,23 @@ class BFTQ:
         transitions = self.replay_buffer.sample(self.batch_size)
         state, action, reward, cost, beta, next_state, done = zip(*transitions)
 
+
         # --- convert to tensors ---
-        state = torch.stack(state).to(self.device)
-        next_state = torch.stack(next_state).to(self.device)
+        state = torch.tensor(np.array(state), dtype=torch.float32, device=self.device)
+        next_state = torch.tensor(np.array(next_state), dtype=torch.float32, device=self.device)
         action = torch.tensor(action, device=self.device).long()
         reward = torch.tensor(reward, device=self.device).float()
         cost = torch.tensor(cost, device=self.device).float()
         beta = torch.tensor(beta, device=self.device).float().unsqueeze(1)
         done = torch.tensor(done, device=self.device).float()
-
+        state = state.view(state.size(0), -1)  # [batch, state_dim]
+        next_state = next_state.view(next_state.size(0), -1)
         # --- forward pass ---
+        # print("DEBUG shapes before network:")
+        # print(f"  state.shape     = {state}")
+        # print(f"  beta.shape      = {beta}")
+        # print(f"  next_state.shape= {next_state}")
+
         q_r, q_c = self.q_net(state, beta)
 
         if getattr(self.q_net, "output_type", "q_values") == "q_values":

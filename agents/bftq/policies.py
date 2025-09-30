@@ -73,14 +73,23 @@ class PytorchBudgetedFittedPolicy(BudgetedPolicy):
         return choice.action, choice.budget
 
     def greedy_policy(self, state, beta):
+        # print("DEBUG greedy_policy: state type =", type(state),
+        #       "shape =", state.shape if hasattr(state, "shape") else "no shape")
+
         with torch.no_grad():
+            # ensure state is a torch tensor of shape [1, state_dim]
+            if not isinstance(state, torch.Tensor):
+                state = torch.tensor(state, device=self.device, dtype=torch.float32)
+            state = state.view(1, -1)  # flatten and add batch dim
+
             hull = pareto_frontier_at(
-                state=torch.tensor([state], device=self.device, dtype=torch.float32),
+                state=state,
                 value_network=self.network,
                 betas=self.betas_for_discretisation,
                 device=self.device,
                 hull_options=self.hull_options,
                 clamp_qc=self.clamp_qc)
+
         mixture = optimal_mixture(hull[0], beta)
         return mixture, hull
 

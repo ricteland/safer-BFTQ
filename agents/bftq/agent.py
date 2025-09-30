@@ -1,5 +1,6 @@
 # agent.py
 import torch
+import numpy as np
 from agents.bftq.bftq import BFTQ
 from utils.replay_buffer import ReplayBuffer
 from models.q_net import BudgetedQNet
@@ -34,7 +35,11 @@ class BFTQAgent:
         self.policy = EpsilonGreedyBudgetedPolicy(greedy_policy, random_policy, config=config["exploration"])
 
     def act(self, state, beta):
-        return self.policy.execute(state, beta)
+        state = torch.tensor(state, dtype=torch.float32, device=self.device).flatten().unsqueeze(0)
+        # print("DEBUG agent.act: state type =", type(state),
+        #       "shape =", state.shape if hasattr(state, "shape") else "no shape")
+        action, new_beta = self.policy.execute(state, beta)
+        return action, new_beta
 
     def push_transition(self, *args):
         self.replay_buffer.push(*args)

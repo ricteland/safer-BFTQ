@@ -104,20 +104,23 @@ def pareto_frontier(values, betas, hull_options, clamp_qc=None):
 
 
 def pareto_frontier_at(state, value_network, betas, device, hull_options, clamp_qc=None):
-    """
-        Compute the Pareto frontier across actions and budgets, at a given state s
-
-    :param state: the current state s
-    :param value_network: a model for the values (Qr, Qc)
-    :param betas: a list of next budgets beta_a
-    :param device: device to forward the network
-    :param hull_options: options for hull computation
-    :param clamp_qc: option to clamp Qc in frontier computation
-    :return: the frontier, all points
-    """
     with torch.no_grad():
-        ss = state.repeat((len(betas), 1, 1))
-        bb = torch.from_numpy(betas).float().unsqueeze(1).unsqueeze(1).to(device=device)
-        sb = torch.cat((ss, bb), dim=2)
-        values = value_network(sb).detach().cpu().numpy()
+        if state.ndim == 1:
+            state = state.unsqueeze(0)
+        elif state.ndim == 2 and state.size(0) == 1:
+            pass
+        else:
+            raise ValueError(f"Unexpected state shape {state.shape}")
+
+        # Repeat state for each beta
+        ss = state.repeat(len(betas), 1)                  # [num_betas, state_dim]
+        bb = torch.as_tensor(betas, dtype=torch.float32, device=device).unsqueeze(1)  # [num_betas, 1]
+
+        # Forward pass
+        q_r, q_c = value_network(ss, bb)
+        values = torch.cat([q_r, q_c], dim=1).detach().cpu().numpy()
+
     return pareto_frontier(values, betas, hull_options=hull_options, clamp_qc=clamp_qc)
+
+
+

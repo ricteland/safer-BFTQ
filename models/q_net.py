@@ -22,6 +22,10 @@ class BudgetedQNet(nn.Module):
         self.predict = nn.Linear(sizes[-1], 2 * n_actions)
 
     def forward(self, state, beta):
+        # if state.dim() != beta.dim():
+        #     print("DEBUG SHAPES in forward():")
+        #     print(f"  state.shape = {state.shape}")
+        #     print(f"  beta.shape  = {beta.shape}")
         # state: [B, state_dim], beta: [B, 1]
         x = torch.cat([state, beta], dim=-1)
         h = self.hidden(x)
