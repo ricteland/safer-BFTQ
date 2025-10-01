@@ -52,3 +52,6 @@ class BNNBFTQAgent:
         # For now, we assume the existing BFTQ class can handle it if the network output is mean+std
         # This might need to be changed to a custom BNNBFTQ class if the loss is different
         return self.bftq.update()
+
+    def save_model(self, path):
+        torch.save(self.q_net.state_dict(), path)

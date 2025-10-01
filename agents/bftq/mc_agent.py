@@ -48,3 +48,6 @@ class MCBFTQAgent:
 
     def update(self):
         return self.bftq.update()
+
+    def save_model(self, path):
+        torch.save(self.q_net.state_dict(), path)

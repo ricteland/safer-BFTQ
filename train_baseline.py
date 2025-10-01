@@ -61,5 +61,8 @@ def main():
     env.close()
     tb_logger.close()
 
+    # Save the model
+    agent.save_model("bftq_model.pt")
+
 if __name__ == "__main__":
     main()
