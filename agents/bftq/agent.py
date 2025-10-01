@@ -29,7 +29,7 @@ class BFTQAgent:
         self.optimizer = torch.optim.Adam(self.q_net.parameters(), lr=config.get("learning_rate", 1e-3))
 
         # === Training logic lives in BFTQ ===
-        self.bftq = BFTQ(self.q_net, self.target_net, self.optimizer, self.replay_buffer, config, device, self.logger, self.tb_logger)
+        self.bftq = BFTQ(self.q_net, self.target_net, self.optimizer, self.replay_buffer, config, device=device, logger=self.logger, tb_logger=self.tb_logger)
 
         # === Policies ===
         greedy_policy = PytorchBudgetedFittedPolicy(self.q_net, np.linspace(0, 1, 100), device, config.get("hull_options", {}))

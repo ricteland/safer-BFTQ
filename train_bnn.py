@@ -14,7 +14,7 @@ def main():
     logger = configure_logger('BNN_BFTQ_train')
     tb_logger = TensorBoardLogger(log_dir="logs/tensorboard_bnn")
 
-    env = gym.make("highway-v0", render_mode="human")
+    env = gym.make("merge-v0", render_mode="human")
     state_dim = env.observation_space.shape[0]
     n_actions = env.action_space.n
 

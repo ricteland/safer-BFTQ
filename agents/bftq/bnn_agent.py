@@ -24,7 +24,7 @@ class BNNBFTQAgent:
         self.replay_buffer = ReplayBuffer(capacity=config.get("buffer_size", 10000))
 
         # === Training logic lives in BNNBFTQ ===
-        self.bftq = BNNBFTQ(self.q_net, self.target_net, self.replay_buffer, config, device, self.logger, self.tb_logger)
+        self.bftq = BNNBFTQ(self.q_net, self.target_net, self.replay_buffer, config, device=device, logger=self.logger, tb_logger=self.tb_logger)
 
         # === Policies ===
         greedy_policy = PessimisticPytorchBudgetedFittedPolicy(
