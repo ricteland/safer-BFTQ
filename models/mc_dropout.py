@@ -36,21 +36,20 @@ class MCDropoutQNet(nn.Module):
     def predict_dist(self, state, beta):
         # Enable dropout during inference
         self.train()
-        with torch.no_grad():
-            q_r_samples = []
-            q_c_samples = []
-            for _ in range(self.n_samples):
-                q_r, q_c = self.forward(state, beta)
-                q_r_samples.append(q_r)
-                q_c_samples.append(q_c)
+        q_r_samples = []
+        q_c_samples = []
+        for _ in range(self.n_samples):
+            q_r, q_c = self.forward(state, beta)
+            q_r_samples.append(q_r)
+            q_c_samples.append(q_c)
 
-            q_r_samples = torch.stack(q_r_samples)
-            q_c_samples = torch.stack(q_c_samples)
+        q_r_samples = torch.stack(q_r_samples)
+        q_c_samples = torch.stack(q_c_samples)
 
-            mean_q_r = q_r_samples.mean(dim=0)
-            std_q_r = q_r_samples.std(dim=0)
-            mean_q_c = q_c_samples.mean(dim=0)
-            std_q_c = q_c_samples.std(dim=0)
+        mean_q_r = q_r_samples.mean(dim=0)
+        std_q_r = q_r_samples.std(dim=0)
+        mean_q_c = q_c_samples.mean(dim=0)
+        std_q_c = q_c_samples.std(dim=0)
 
         return (mean_q_r, std_q_r), (mean_q_c, std_q_c)
 

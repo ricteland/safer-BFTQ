@@ -42,17 +42,14 @@ class BFTQ:
         # print(f"  beta.shape      = {beta}")
         # print(f"  next_state.shape= {next_state}")
 
-        q_r, q_c = self.q_net(state, beta)
-
         if getattr(self.q_net, "output_type", "q_values") == "q_values":
+            q_r, q_c = self.q_net(state, beta)
             # pick the Q-values for the chosen action
             q_r = q_r.gather(1, action.unsqueeze(1)).squeeze()
             q_c = q_c.gather(1, action.unsqueeze(1)).squeeze()
 
-        elif self.q_net.output_type == "mean_std":
-            # q_r and q_c each contain [mean | std] concatenated
-            q_r_mean, q_r_std = torch.chunk(q_r, 2, dim=1)
-            q_c_mean, q_c_std = torch.chunk(q_c, 2, dim=1)
+        elif self.q_net.output_type == "distribution":
+            (q_r_mean, q_r_std), (q_c_mean, q_c_std) = self.q_net.predict_dist(state, beta)
 
             # pick the mean for the chosen action
             q_r = q_r_mean.gather(1, action.unsqueeze(1)).squeeze()
@@ -67,15 +64,13 @@ class BFTQ:
 
         # --- target Q ---
         with torch.no_grad():
-            next_q_r, next_q_c = self.target_net(next_state, beta)
-
             if self.q_net.output_type == "q_values":
+                next_q_r, next_q_c = self.target_net(next_state, beta)
                 next_q_r = next_q_r.max(1)[0]
                 next_q_c = next_q_c.max(1)[0]
 
-            elif self.q_net.output_type == "mean_std":
-                next_q_r_mean, _ = torch.chunk(next_q_r, 2, dim=1)
-                next_q_c_mean, _ = torch.chunk(next_q_c, 2, dim=1)
+            elif self.q_net.output_type == "distribution":
+                (next_q_r_mean, _), (next_q_c_mean, _) = self.target_net.predict_dist(next_state, beta)
                 next_q_r = next_q_r_mean.max(1)[0]
                 next_q_c = next_q_c_mean.max(1)[0]
 
