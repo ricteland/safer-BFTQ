@@ -43,9 +43,10 @@ class BayesianQNet(PyroModule):
             q_r_pred_action = q_r_pred.gather(1, action.unsqueeze(1)).squeeze(-1)
             q_c_pred_action = q_c_pred.gather(1, action.unsqueeze(1)).squeeze(-1)
 
-            pyro.sample("obs_r", dist.Normal(q_r_pred_action, 0.1), obs=target_q_r)
-            pyro.sample("obs_c", dist.Normal(q_c_pred_action, 0.1), obs=target_q_c)
-        
+            with pyro.plate("data", size=state.shape[0]):
+                pyro.sample("obs_r", dist.Normal(q_r_pred_action, 0.1), obs=target_q_r)
+                pyro.sample("obs_c", dist.Normal(q_c_pred_action, 0.1), obs=target_q_c)
+
         else:
             # --- Inference mode ---
             # To get uncertainty, we need to sample from the guide, which is done by calling the model multiple times.
