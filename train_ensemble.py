@@ -1,8 +1,8 @@
 import highway_env
 import gymnasium as gym
 import numpy as np
-from agents.bftq.mc_agent import MCBFTQAgent
-from models.mc_dropout import MCDropoutQNet
+from agents.bftq.ensemble_agent import EnsembleBFTQAgent
+from models.ensemble import EnsembleQNet
 from utils.logger import configure_logger, TensorBoardLogger
 
 
@@ -17,8 +17,8 @@ def main():
     parser.add_argument("--inference-mode", type=str, default="pessimistic", help="The action selection mode for inference (pessimistic or mean)")
     args = parser.parse_args()
     # === Logger ===
-    logger = configure_logger('MC_BFTQ_train')
-    tb_logger = TensorBoardLogger(log_dir="logs/tensorboard_mc")
+    logger = configure_logger('Ensemble_BFTQ_train')
+    tb_logger = TensorBoardLogger(log_dir="logs/tensorboard_ensemble")
 
     env = gym.make("merge-v0", render_mode="human")
     state_dim = env.observation_space.shape[0]
@@ -34,12 +34,11 @@ def main():
         "exploration": {"temperature": 1.0, "final_temperature": 0.1, "tau": 5000},
         "hull_options": dict(library="scipy", decimals=2, remove_duplicates=True),
         "k": 1.96, # Risk-aversion parameter
-        "dropout_p": 0.5, # Dropout probability
-        "n_samples": 10 # Number of samples for MC Dropout
+        "n_models": 5 # Number of models in the ensemble
     }
 
     state_dim = int(np.prod(env.observation_space.shape))
-    agent = MCBFTQAgent(state_dim, n_actions, config, network=MCDropoutQNet, device="cpu", logger=logger, tb_logger=tb_logger)
+    agent = EnsembleBFTQAgent(state_dim, n_actions, config, network=EnsembleQNet, device="cpu", logger=logger, tb_logger=tb_logger)
     if hasattr(agent, "set_training_mode"):
         agent.set_training_mode(args.training_mode)
 
@@ -73,7 +72,7 @@ def main():
     tb_logger.close()
 
     # Save the model
-    agent.save_model("models_weights/mc_bftq_model.pt")
+    agent.save_model("models_weights/ensemble_bftq_model.pt")
 
 if __name__ == "__main__":
     main()

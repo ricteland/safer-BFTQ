@@ -11,7 +11,7 @@ from agents.bftq.policies import PytorchBudgetedFittedPolicy, BudgetedPolicy
 from agents.bftq.greedy_policy import optimal_mixture, ValuePoint
 
 
-class PessimisticPytorchBudgetedFittedPolicy(PytorchBudgetedFittedPolicy):
+class EnsemblePessimisticPytorchBudgetedFittedPolicy(PytorchBudgetedFittedPolicy):
     def __init__(self, network, betas_for_discretisation, device, hull_options, k, clamp_qc=None, np_random=np.random, training_mode="pessimistic"):
         super().__init__(network, betas_for_discretisation, device, hull_options, clamp_qc, np_random)
         self.k = k
@@ -48,7 +48,7 @@ def pessimistic_pareto_frontier_at(state, value_network, betas, device, hull_opt
         ss = state.repeat(len(betas), 1)
         bb = torch.as_tensor(betas, dtype=torch.float32, device=device).unsqueeze(1)
 
-        (q_r_mean, _), (q_c_mean, q_c_std) = value_network(ss, bb)
+        (q_r_mean, _), (q_c_mean, q_c_std) = value_network.predict_dist(ss, bb)
         
         q_r_mean = q_r_mean.detach().cpu().numpy()
         q_c_mean = q_c_mean.detach().cpu().numpy()

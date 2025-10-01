@@ -3,4 +3,5 @@ __pycache__/
 *.pyc
 *.lock
 
-/logs/
+/logs/*
+/model_weights/*

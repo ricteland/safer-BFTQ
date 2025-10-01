@@ -66,7 +66,10 @@ class EpsilonGreedyBudgetedPolicy(BudgetedPolicy):
         self.time = 0
 
     def execute(self, state, beta):
-        epsilon = self.config['final_temperature'] + (self.config['temperature'] - self.config['final_temperature']) * \
+        if self.config['tau'] == 0:
+            epsilon = self.config['final_temperature']
+        else:
+            epsilon = self.config['final_temperature'] + (self.config['temperature'] - self.config['final_temperature']) * \
                        np.exp(- self.time / self.config['tau'])
         self.time += 1
 

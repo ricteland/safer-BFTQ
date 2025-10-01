@@ -49,5 +49,11 @@ class MCBFTQAgent:
     def update(self):
         return self.bftq.update()
 
+    def set_training_mode(self, mode):
+        self.policy.pi_greedy.training_mode = mode
+
     def save_model(self, path):
         torch.save(self.q_net.state_dict(), path)
+
+    def load_model(self, path):
+        self.q_net.load_state_dict(torch.load(path))

@@ -51,3 +51,6 @@ class BFTQAgent:
 
     def save_model(self, path):
         torch.save(self.q_net.state_dict(), path)
+
+    def load_model(self, path):
+        self.q_net.load_state_dict(torch.load(path))

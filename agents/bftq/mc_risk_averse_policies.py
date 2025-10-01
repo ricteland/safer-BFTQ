@@ -12,9 +12,10 @@ from agents.bftq.greedy_policy import optimal_mixture, ValuePoint
 
 
 class MCPessimisticPytorchBudgetedFittedPolicy(PytorchBudgetedFittedPolicy):
-    def __init__(self, network, betas_for_discretisation, device, hull_options, k, clamp_qc=None, np_random=np.random):
+    def __init__(self, network, betas_for_discretisation, device, hull_options, k, clamp_qc=None, np_random=np.random, training_mode="pessimistic"):
         super().__init__(network, betas_for_discretisation, device, hull_options, clamp_qc, np_random)
         self.k = k
+        self.training_mode = training_mode
 
     def greedy_policy(self, state, beta):
         with torch.no_grad():
@@ -28,7 +29,7 @@ class MCPessimisticPytorchBudgetedFittedPolicy(PytorchBudgetedFittedPolicy):
                 betas=self.betas_for_discretisation,
                 device=self.device,
                 hull_options=self.hull_options,
-                k=self.k,
+                k=self.k if self.training_mode == "pessimistic" else 0,
                 clamp_qc=self.clamp_qc)
 
         mixture = optimal_mixture(hull[0], beta)
