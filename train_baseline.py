@@ -62,7 +62,7 @@ def main():
     tb_logger.close()
 
     # Save the model
-    agent.save_model("bftq_model.pt")
+    agent.save_model("model_weights/bftq_model.pt")
 
 if __name__ == "__main__":
     main()

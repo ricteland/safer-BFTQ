@@ -9,7 +9,13 @@ from utils.logger import configure_logger, TensorBoardLogger
 print([env_spec.id for env_spec in gym.envs.registry.values() if "highway" in env_spec.id])
 
 
+import argparse
+
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--training-mode", type=str, default="pessimistic", help="The action selection mode for training (pessimistic or mean)")
+    parser.add_argument("--inference-mode", type=str, default="pessimistic", help="The action selection mode for inference (pessimistic or mean)")
+    args = parser.parse_args()
     # === Logger ===
     logger = configure_logger('BNN_BFTQ_train')
     tb_logger = TensorBoardLogger(log_dir="logs/tensorboard_bnn")
@@ -32,6 +38,8 @@ def main():
 
     state_dim = int(np.prod(env.observation_space.shape))
     agent = BNNBFTQAgent(state_dim, n_actions, config, network=BayesianQNet, device="cpu", logger=logger, tb_logger=tb_logger)
+    if hasattr(agent, "set_training_mode"):
+        agent.set_training_mode(args.training_mode)
 
     n_episodes = 100
     for ep in range(n_episodes):
@@ -63,7 +71,7 @@ def main():
     tb_logger.close()
 
     # Save the model
-    agent.save_model("bnn_bftq_model.pt")
+    agent.save_model("model_weights/bnn_bftq_model.pt")
 
 if __name__ == "__main__":
     main()

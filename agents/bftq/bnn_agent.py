@@ -53,6 +53,9 @@ class BNNBFTQAgent:
         # This might need to be changed to a custom BNNBFTQ class if the loss is different
         return self.bftq.update()
 
+    def set_training_mode(self, mode):
+        self.policy.pi_greedy.training_mode = mode
+
     def save_model(self, path):
         torch.save(self.q_net.state_dict(), path)
 
