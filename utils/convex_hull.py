@@ -53,3 +53,6 @@ def test():
     plt.gca().set_aspect("equal", adjustable="box")
     plt.title("Convex Hull Test")
     plt.show()
+
+if __name__ == "__main__":
+    test()
