@@ -32,7 +32,7 @@ This project uses [Nix](https://nixos.org/) to manage dependencies. The `flake.n
 
 ### Training
 
-To run the BFTQ agent, use the `quicktrian.py` script:
+To run the BFTQ agent, use the `train_baseline.py` script:
 
 ```bash
 python train_baseline.py
@@ -69,7 +69,7 @@ This project uses the standard Python `logging` module and TensorBoard for loggi
 - `utils/`: Contains utility functions.
   - `logger.py`: The logging configuration.
   - `replay_buffer.py`: The replay buffer implementation.
-- `quicktrian.py`: The main script to run the training.
+- `train_baseline.py`: The main script to run the training.
 - `train_bnn.py`: The main script to run the BNN-BFTQ training.
 - `flake.nix`: The Nix flake defining the development environment.
 
