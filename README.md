@@ -35,7 +35,7 @@ This project uses [Nix](https://nixos.org/) to manage dependencies. The `flake.n
 To run the BFTQ agent, use the `quicktrian.py` script:
 
 ```bash
-python quicktrian.py
+python train_baseline.py
 ```
 
 To run the BNN-BFTQ agent, use the `train_bnn.py` script:
