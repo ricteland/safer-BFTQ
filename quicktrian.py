@@ -3,12 +3,17 @@ import gymnasium as gym
 import numpy as np
 from agents.bftq.agent import BFTQAgent
 from models.q_net import BudgetedQNet
+from utils.logger import configure_logger, TensorBoardLogger
 
 
 print([env_spec.id for env_spec in gym.envs.registry.values() if "highway" in env_spec.id])
 
 
 def main():
+    # === Logger ===
+    logger = configure_logger('BFTQ_train')
+    tb_logger = TensorBoardLogger()
+
     env = gym.make("highway-v0", render_mode="human")
     state_dim = env.observation_space.shape[0]
     n_actions = env.action_space.n
@@ -25,7 +30,7 @@ def main():
     }
 
     state_dim = int(np.prod(env.observation_space.shape))
-    agent = BFTQAgent(state_dim, n_actions, config, network=BudgetedQNet, device="cpu")
+    agent = BFTQAgent(state_dim, n_actions, config, network=BudgetedQNet, device="cpu", logger=logger, tb_logger=tb_logger)
 
     n_episodes = 100
     for ep in range(n_episodes):
@@ -48,9 +53,13 @@ def main():
 
             env.render()
 
-        print(f"Episode {ep}, total reward: {total_reward}")
+        logger.info(f"Episode {ep}, total reward: {total_reward}")
+        tb_logger.log_scalar('reward/total_reward', total_reward, ep)
+        tb_logger.log_scalar('beta/beta', beta, ep)
+
 
     env.close()
+    tb_logger.close()
 
 if __name__ == "__main__":
     main()

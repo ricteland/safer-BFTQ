@@ -11,10 +11,12 @@ from agents.bftq.policies import (
 )
 
 class BFTQAgent:
-    def __init__(self, state_dim, n_actions, config, network=BudgetedQNet, device="cpu"):
+    def __init__(self, state_dim, n_actions, config, network=BudgetedQNet, device="cpu", logger=None, tb_logger=None):
         self.state_dim = state_dim
         self.n_actions = n_actions
         self.device = device
+        self.logger = logger
+        self.tb_logger = tb_logger
 
         # === Networks ===
         self.q_net = network(size_state=state_dim, n_actions=n_actions, layers=config.get("layers", [64, 64])).to(device)
@@ -27,7 +29,7 @@ class BFTQAgent:
         self.optimizer = torch.optim.Adam(self.q_net.parameters(), lr=config.get("learning_rate", 1e-3))
 
         # === Training logic lives in BFTQ ===
-        self.bftq = BFTQ(self.q_net, self.target_net, self.optimizer, self.replay_buffer, config, device)
+        self.bftq = BFTQ(self.q_net, self.target_net, self.optimizer, self.replay_buffer, config, device, self.logger, self.tb_logger)
 
         # === Policies ===
         greedy_policy = PytorchBudgetedFittedPolicy(self.q_net, np.linspace(0, 1, 100), device, config.get("hull_options", {}))

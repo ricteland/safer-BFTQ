@@ -4,7 +4,7 @@ import torch.nn as nn
 import numpy as np
 
 class BFTQ:
-    def __init__(self, q_net, target_net, optimizer, replay_buffer, config, device="cpu"):
+    def __init__(self, q_net, target_net, optimizer, replay_buffer, config, device="cpu", logger=None, tb_logger=None):
         self.q_net = q_net
         self.target_net = target_net
         self.optimizer = optimizer
@@ -15,6 +15,8 @@ class BFTQ:
         self.gamma = config.get("gamma", 0.99)
         self.batch_size = config.get("batch_size", 32)
         self.target_update = config.get("target_update", 100)
+        self.logger = logger
+        self.tb_logger = tb_logger
 
     def update(self):
         if len(self.replay_buffer) < self.batch_size:
@@ -95,5 +97,13 @@ class BFTQ:
         self.steps += 1
         if self.steps % self.target_update == 0:
             self.target_net.load_state_dict(self.q_net.state_dict())
+
+        if self.logger:
+            self.logger.info(f"Step {self.steps}: loss={loss.item():.4f}, loss_r={loss_r.item():.4f}, loss_c={loss_c.item():.4f}")
+        if self.tb_logger:
+            self.tb_logger.log_scalar('loss/total', loss.item(), self.steps)
+            self.tb_logger.log_scalar('loss/reward', loss_r.item(), self.steps)
+            self.tb_logger.log_scalar('loss/cost', loss_c.item(), self.steps)
+
 
         return loss.item()
