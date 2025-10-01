@@ -1,0 +1,2 @@
+2025-10-01 10:48:56,563 - test_logger - INFO - This is an info message.
+2025-10-01 10:48:56,563 - test_logger - WARNING - This is a warning message.
