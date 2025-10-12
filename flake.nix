@@ -123,6 +123,7 @@
          notebook
          pyvirtualdisplay
          highway
+         stable-baselines3
           tables.overrideAttrs (oldAttrs: {
             doCheck = false;
           })
@@ -143,6 +144,9 @@
           ];
 
           shellHook = cudaEnvHook + ''
+	    
+	    export LD_LIBRARY_PATH=/usr/lib/wsl/lib:$LD_LIBRARY_PATH
+
             echo "CUDA toolkit available at: $CUDA_HOME"
             echo "Python environment with Torch, CUDA. "
           '';

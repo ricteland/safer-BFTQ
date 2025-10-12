@@ -75,7 +75,7 @@ def main():
 
     # create the pool of parallel environments
     env = make_vec_env(
-        "merge-v0",
+        "highway-v0",
         n_envs=args.num_envs,
         vec_env_cls=SubprocVecEnv,
         wrapper_class=FlattenObservation  # ensure input to agent is 1d
