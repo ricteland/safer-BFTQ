@@ -69,7 +69,7 @@ def main():
         total_reward = 0
 
         while not done:
-            action, beta = agent.act(state, beta)
+            action, beta, q_r, q_c, old_beta = agent.act(state, beta)
             next_state, reward, terminated, truncated, info = env.step(action)
             done = terminated or truncated
 

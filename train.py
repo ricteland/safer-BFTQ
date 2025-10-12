@@ -25,6 +25,25 @@ from agents.bftq.bnn_agent import BNNBFTQAgent
 from agents.bftq.ensemble_agent import EnsembleBFTQAgent
 from agents.bftq.mc_agent import MCBFTQAgent
 from utils.logger import configure_logger, TensorBoardLogger
+def compute_cost(info, horizon):
+    """
+    Compute safety cost per time step, following the paper's approach.
+
+    Cost = 1/H whenever the ego-vehicle is 'unsafe':
+      - crashed = True, or
+      - not driving in right lane (right_lane_reward < 1).
+    """
+    # Safety cost = 1/H if crashed or off right lane
+    crashed = info.get("crashed", False)
+    right_lane = info["rewards"].get("right_lane_reward", 1.0)
+
+    if crashed or right_lane < 1.0:
+        return 1.0 / horizon
+    else:
+        return 0.0
+
+
+
 
 
 def main():
@@ -61,6 +80,11 @@ def main():
         vec_env_cls=SubprocVecEnv,
         wrapper_class=FlattenObservation  # ensure input to agent is 1d
     )
+
+    # Environment horizon (episode length)
+    #H = env.get_attr("config")[0]["duration"]
+    H=10
+    logger.info(f"Detected horizon (H): {H}")
 
     state_dim = env.observation_space.shape[0]
     n_actions = env.action_space.n
@@ -111,9 +135,12 @@ def main():
     if hasattr(agent, "set_training_mode"):
         agent.set_training_mode(args.training_mode)
 
+
     # ----- training logic starts here -----
     n_episodes = 0
+    global_step = 0  # <-- NEW: counts every environment step
     total_rewards_per_env = np.zeros(args.num_envs)
+    total_costs_per_env = np.zeros(args.num_envs)
     start_time = time.time()
 
     states = env.reset()
@@ -121,43 +148,85 @@ def main():
 
     while n_episodes < args.total_episodes:
         actions = []
+        q_r_list, q_c_list, old_beta_list, new_beta_list = [], [], [], []
+
+        # === Step 1: Act in each environment ===
         for i in range(args.num_envs):
-            action, new_beta = agent.act(states[i], betas[i]) # agent now uses the SubprocVecEnv, so NUM_ENV steps are taken at once
-            actions.append(action) # we need to collect these actions and then iterate through them per core
+            action, new_beta, q_r, q_c, old_beta = agent.act(states[i], betas[i])
+            actions.append(action)
+            q_r_list.append(q_r)
+            q_c_list.append(q_c)
+            old_beta_list.append(old_beta)
+            new_beta_list.append(new_beta)
             betas[i] = new_beta
 
+        # === Step 2: Environment step ===
         next_states, rewards, dones, infos = env.step(actions)
-
+        # === Step 3: Push transitions and accumulate ===
         for i in range(args.num_envs):
+            cost = compute_cost(infos[i], H)
             agent.push_transition(
                 states[i], actions[i], rewards[i],
-                infos[i].get("cost", 0), betas[i], next_states[i], dones[i]
+                cost, betas[i], next_states[i], dones[i]
             )
             total_rewards_per_env[i] += rewards[i]
+            total_costs_per_env[i] += cost
 
+        # === Step 4: Log EVERYTHING to TensorBoard per step ===
+        # One averaged log across all envs (keeps logs manageable)
+        tb_logger.log_scalar("step/reward_mean", np.mean(rewards), global_step)
+        tb_logger.log_scalar("step/pred_qr_mean", np.mean(q_r_list), global_step)
+        tb_logger.log_scalar("step/pred_qc_mean", np.mean(q_c_list), global_step)
+        tb_logger.log_scalar("step/beta_old_mean", np.mean(old_beta_list), global_step)
+        tb_logger.log_scalar("step/beta_new_mean", np.mean(new_beta_list), global_step)
+        tb_logger.log_scalar("step/beta_var", np.var(new_beta_list), global_step)
+
+        # Optional: log per-environment values (comment out if too large)
+        # for i in range(args.num_envs):
+        #     tb_logger.log_scalar(f"env_{i}/reward", rewards[i], global_step)
+        #     tb_logger.log_scalar(f"env_{i}/pred_qr", q_r_list[i], global_step)
+        #     tb_logger.log_scalar(f"env_{i}/pred_qc", q_c_list[i], global_step)
+        #     tb_logger.log_scalar(f"env_{i}/beta_old", old_beta_list[i], global_step)
+        #     tb_logger.log_scalar(f"env_{i}/beta_new", new_beta_list[i], global_step)
+
+        global_step += 1  # <-- increment per environment step
+
+        # === Step 5: Check for completed episodes ===
+        for i in range(args.num_envs):
             if dones[i]:
                 n_episodes += 1
-                logger.info(
-                    f"Episode {n_episodes}/{args.total_episodes}, "
-                    f"total reward: {total_rewards_per_env[i]:.4f}"
-                )
-                tb_logger.log_scalar('reward/total_reward', total_rewards_per_env[i], n_episodes)
 
-                # reset episode specific counters
+                # Log to TensorBoard (episode-level aggregates)
+                tb_logger.log_scalar("episode/total_reward", total_rewards_per_env[i], n_episodes)
+                tb_logger.log_scalar("episode/total_pred_cost", total_costs_per_env[i], n_episodes)
+                tb_logger.log_scalar("episode/last_beta_old", old_beta_list[i], n_episodes)
+                tb_logger.log_scalar("episode/last_beta_new", new_beta_list[i], n_episodes)
+
+                # Minimal console output
+                logger.info(
+                    f"Episode {n_episodes}/{args.total_episodes} | "
+                    f"Reward: {total_rewards_per_env[i]:.3f} | "
+                    f"Pred cost: {total_costs_per_env[i]:.3f} | "
+                    f"Beta: {old_beta_list[i]:.3f} -> {new_beta_list[i]:.3f}"
+                )
+
+                # Reset episode counters
                 total_rewards_per_env[i] = 0
+                total_costs_per_env[i] = 0
                 betas[i] = np.random.uniform()
 
-                # if reached our goal, stop
                 if n_episodes >= args.total_episodes:
                     break
 
+        # === Step 6: Prepare next state ===
         states = next_states
 
+        # === Step 7: Agent update ===
         if len(agent.replay_buffer) > config["batch_size"]:
             for _ in range(args.num_envs):
                 agent.update()
 
-    # cleanup
+    # === Cleanup ===
     end_time = time.time()
     logger.info(f"Training finished in {end_time - start_time:.2f} seconds.")
 

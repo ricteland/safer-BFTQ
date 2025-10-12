@@ -33,7 +33,23 @@ class MCPessimisticPytorchBudgetedFittedPolicy(PytorchBudgetedFittedPolicy):
                 clamp_qc=self.clamp_qc)
 
         mixture = optimal_mixture(hull[0], beta)
-        return mixture, hull
+
+        # === Extract predicted cost/reward based on mixture ===
+        inf_p = mixture.inf
+        sup_p = mixture.sup
+        p = mixture.probability_sup
+
+        # Handle degenerate and edge cases gracefully
+        if mixture.status == "regular":
+            pred_qr = (1 - p) * inf_p.qr + p * sup_p.qr
+            pred_qc = (1 - p) * inf_p.qc + p * sup_p.qc
+        else:
+            # when too_much_budget / too_little_budget / not_solvable
+            pred_qr = inf_p.qr
+            pred_qc = inf_p.qc
+
+        # Return mixture, hull, and predicted values
+        return mixture, hull, pred_qr, pred_qc
 
 
 def pessimistic_pareto_frontier_at(state, value_network, betas, device, hull_options, k, clamp_qc=None):
@@ -53,7 +69,6 @@ def pessimistic_pareto_frontier_at(state, value_network, betas, device, hull_opt
         q_r_mean = q_r_mean.detach().cpu().numpy()
         q_c_mean = q_c_mean.detach().cpu().numpy()
         q_c_std = q_c_std.detach().cpu().numpy()
-
     return pessimistic_pareto_frontier(q_r_mean, q_c_mean, q_c_std, betas, hull_options, k, clamp_qc)
 
 

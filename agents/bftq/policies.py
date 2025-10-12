@@ -93,7 +93,7 @@ class RandomBudgetedPolicy(BudgetedPolicy):
         budget_probs = sample_simplex(coeff=action_probs, bias=beta, min_x=0, max_x=1, np_random=self.np_random)
         action = self.np_random.choice(a=range(self.n_actions), p=action_probs)
         beta = budget_probs[action]
-        return action, beta
+        return action, beta, 0, 0
 
 
 class PytorchBudgetedFittedPolicy(BudgetedPolicy):
@@ -112,9 +112,9 @@ class PytorchBudgetedFittedPolicy(BudgetedPolicy):
         self.network = copy.deepcopy(network)
 
     def execute(self, state, beta):
-        mixture, _ = self.greedy_policy(state, beta)
+        mixture, _, q_r, q_c = self.greedy_policy(state, beta)
         choice = mixture.sup if self.np_random.uniform() < mixture.probability_sup else mixture.inf
-        return choice.action, choice.budget
+        return choice.action, choice.budget, q_r, q_c
 
     def greedy_policy(self, state, beta):
         # print("DEBUG greedy_policy: state type =", type(state),
@@ -135,7 +135,22 @@ class PytorchBudgetedFittedPolicy(BudgetedPolicy):
                 clamp_qc=self.clamp_qc)
 
         mixture = optimal_mixture(hull[0], beta)
-        return mixture, hull
+        # === Extract predicted cost/reward based on mixture ===
+        inf_p = mixture.inf
+        sup_p = mixture.sup
+        p = mixture.probability_sup
+
+        # Handle degenerate and edge cases gracefully
+        if mixture.status == "regular":
+            pred_qr = (1 - p) * inf_p.qr + p * sup_p.qr
+            pred_qc = (1 - p) * inf_p.qc + p * sup_p.qc
+        else:
+            # when too_much_budget / too_little_budget / not_solvable
+            pred_qr = inf_p.qr
+            pred_qc = inf_p.qc
+
+        # Return mixture, hull, and predicted values
+        return mixture, hull, pred_qr, pred_qc
 
 def test():
     class DummyGreedyPolicy:

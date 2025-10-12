@@ -40,8 +40,9 @@ class MCBFTQAgent:
 
     def act(self, state, beta):
         state = torch.tensor(state, dtype=torch.float32, device=self.device).flatten().unsqueeze(0)
-        action, new_beta = self.policy.execute(state, beta)
-        return action, new_beta
+        action, new_beta, q_r, q_c = self.policy.execute(state, beta)
+        old_beta = beta
+        return action, new_beta, q_r, q_c, old_beta
 
     def push_transition(self, *args):
         self.replay_buffer.push(*args)
