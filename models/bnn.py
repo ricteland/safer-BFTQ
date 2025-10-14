@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+
 import pyro
 import pyro.distributions as dist
 from pyro.nn import PyroModule, PyroSample
@@ -11,7 +13,9 @@ class BayesianQNet(PyroModule):
         super().__init__()
         self.size_state = size_state
         self.n_actions = n_actions
-        
+
+        self.debug = False
+
         # --- Layer definitions ---
         self.fc1 = PyroModule[nn.Linear](size_state + 1, layers[0])
         self.fc1.weight = PyroSample(dist.Normal(0., 1.).expand([layers[0], size_state + 1]).to_event(2))
@@ -21,13 +25,25 @@ class BayesianQNet(PyroModule):
         self.fc2.weight = PyroSample(dist.Normal(0., 1.).expand([layers[1], layers[0]]).to_event(2))
         self.fc2.bias = PyroSample(dist.Normal(0., 1.).expand([layers[1]]).to_event(1))
 
-        self.predict = PyroModule[nn.Linear](layers[1], 2 * n_actions)
-        self.predict.weight = PyroSample(dist.Normal(0., 1.).expand([2 * n_actions, layers[1]]).to_event(2))
-        self.predict.bias = PyroSample(dist.Normal(0., 1.).expand([2 * n_actions]).to_event(1))
+        # Ata modification logs 1:
+        # the output layer is now 4x the number of actions,
+        # it will predict Q_r_mean, Q_r_log_std, Q_c_mean, Q_c_log_std for each action
+        self.predict = PyroModule[nn.Linear](layers[1], 4 * n_actions)
+        self.predict.weight = PyroSample(dist.Normal(0., 1.).expand([4 * n_actions, layers[1]]).to_event(2))
+        self.predict.bias = PyroSample(dist.Normal(0., 1.).expand([4 * n_actions]).to_event(1))
+
+        # old code:
+        # self.predict = PyroModule[nn.Linear](layers[1], 2 * n_actions)
+        # self.predict.weight = PyroSample(dist.Normal(0., 1.).expand([2 * n_actions, layers[1]]).to_event(2))
+        # self.predict.bias = PyroSample(dist.Normal(0., 1.).expand([2 * n_actions]).to_event(1))
 
         self.relu = nn.ReLU()
 
     def forward(self, state, beta, target_q_r=None, target_q_c=None, action=None, n_samples=10):
+        if self.debug and action is not None:
+            print(f"\n--- [BNN Forward Pass @ Step] ---")
+            print(f"  Input state shape: {state.shape}, beta shape: {beta.shape}")
+
         x = torch.cat([state, beta], dim=-1)
 
         # The guide is sampled once per forward pass in training mode
@@ -35,17 +51,52 @@ class BayesianQNet(PyroModule):
         h = self.relu(self.fc2(h))
         out = self.predict(h)
 
+        # Ata modification logs 2:
+        # splitting the output into mean and log_std components
+        q_r_mean_all, q_r_log_std_all, q_c_mean_all, q_c_log_std_all = torch.split(out, self.n_actions, dim=1)
+
         if target_q_r is not None:
             # --- Training mode ---
-            q_r_pred = out[:, :self.n_actions]
-            q_c_pred = out[:, self.n_actions:]
+            q_r_mean_action = q_r_mean_all.gather(1, action.unsqueeze(1)).squeeze(-1)
+            q_r_log_std_action = q_r_log_std_all.gather(1, action.unsqueeze(1)).squeeze(-1)
+            q_c_mean_action = q_c_mean_all.gather(1, action.unsqueeze(1)).squeeze(-1)
+            q_c_log_std_action = q_c_log_std_all.gather(1, action.unsqueeze(1)).squeeze(-1)
 
-            q_r_pred_action = q_r_pred.gather(1, action.unsqueeze(1)).squeeze(-1)
-            q_c_pred_action = q_c_pred.gather(1, action.unsqueeze(1)).squeeze(-1)
+            # ata modification logs 3:
+            # calculate a positive std from log_std
+            # using softplus for stability: log(1 + exp(x)), ensures std > 0
+            q_r_std_action = F.softplus(q_r_log_std_action) + 1e-6
+            q_c_std_action = F.softplus(q_c_log_std_action) + 1e-6
 
+            if self.debug:
+                print(f"  [Targets]   Q_r: shape={target_q_r.shape}, mean={target_q_r.mean():.3f}, std={target_q_r.std():.3f}")
+                print(f"  [Predicted] Q_r mean: shape={q_r_mean_action.shape}, mean={q_r_mean_action.mean().item():.3f}, std={q_r_mean_action.std().item():.3f}")
+                print(f"  [Predicted] Q_r std:  shape={q_r_std_action.shape}, mean={q_r_std_action.mean().item():.3f}, std={q_r_std_action.std().item():.3f}")
+                print(f"  ---------------------------------")
+                print(f"  [Targets]   Q_c: shape={target_q_c.shape}, mean={target_q_c.mean():.3f}, std={target_q_c.std():.3f}")
+                print(f"  [Predicted] Q_c mean: shape={q_c_mean_action.shape}, mean={q_c_mean_action.mean().item():.3f}, std={q_c_mean_action.std().item():.3f}")
+                print(f"  [Predicted] Q_c std:  shape={q_c_std_action.shape}, mean={q_c_std_action.mean().item():.3f}, std={q_c_std_action.std().item():.3f}")
+
+
+            # ata modification logs 4:
+            # use the learned std. in the distribution
             with pyro.plate("data", size=state.shape[0]):
-                pyro.sample("obs_r", dist.Normal(q_r_pred_action, 0.1), obs=target_q_r)
-                pyro.sample("obs_c", dist.Normal(q_c_pred_action, 0.1), obs=target_q_c)
+                pyro.sample("obs_r", dist.Normal(q_r_mean_action, q_r_std_action), obs=target_q_r)
+                pyro.sample("obs_c", dist.Normal(q_c_mean_action, q_c_std_action), obs=target_q_c)
+
+            # In training, the model returns nothing as SVI handles the loss.
+            return
+
+            # -- old code
+            # q_r_pred = out[:, :self.n_actions]
+            # q_c_pred = out[:, self.n_actions:]
+            #
+            # q_r_pred_action = q_r_pred.gather(1, action.unsqueeze(1)).squeeze(-1)
+            # q_c_pred_action = q_c_pred.gather(1, action.unsqueeze(1)).squeeze(-1)
+            #
+            # with pyro.plate("data", size=state.shape[0]):
+            #     pyro.sample("obs_r", dist.Normal(q_r_pred_action, 0.1), obs=target_q_r)
+            #     pyro.sample("obs_c", dist.Normal(q_c_pred_action, 0.1), obs=target_q_c)
 
         else:
             # --- Inference mode ---
@@ -66,11 +117,21 @@ class BayesianQNet(PyroModule):
             mean_q = torch.mean(sampled_q_values, dim=0)
             std_q = torch.std(sampled_q_values, dim=0)
 
-            q_r_mean = mean_q[:, :self.n_actions]
-            q_c_mean = mean_q[:, self.n_actions:]
-            
-            q_r_std = std_q[:, :self.n_actions]
-            q_c_std = std_q[:, self.n_actions:]
+            # ata modification logs 5:
+            # split the mean and std outputs and the std of the predicted means
+            q_r_mean_of_means, _, q_c_mean_of_means, _ = torch.split(mean_q, self.n_actions, dim=1)
+            q_r_std_of_means, _, q_c_std_of_means, _ = torch.split(std_q, self.n_actions, dim=1)
+
+            return (q_r_mean_of_means, q_r_std_of_means), (q_c_mean_of_means, q_c_std_of_means)
+
+
+
+            #--- old code
+            # q_r_mean = mean_q[:, :self.n_actions]
+            # q_c_mean = mean_q[:, self.n_actions:]
+            #
+            # q_r_std = std_q[:, :self.n_actions]
+            # q_c_std = std_q[:, self.n_actions:]
 
             return (q_r_mean, q_r_std), (q_c_mean, q_c_std)
 

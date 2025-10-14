@@ -61,6 +61,9 @@ def main():
     parser.add_argument("--n-models", type=int, default=5, help="Number of models in the ensemble.")
     parser.add_argument("--dropout-p", type=float, default=0.5, help="Dropout probability for MC Dropout.")
     parser.add_argument("--n-samples", type=int, default=10, help="Number of samples for MC Dropout.")
+
+    parser.add_argument("--debug", action="store_true", help="Enable detailed debug prints.")
+
     args = parser.parse_args()
 
     #  setup & config
@@ -68,10 +71,12 @@ def main():
     logger = configure_logger(f'{model_name_upper}_BFTQ_train')
     tb_logger = TensorBoardLogger(log_dir=f"logs/tensorboard_{args.model}")
 
-    # device = "cuda" if torch.cuda.is_available() else "cpu"
     device = "cpu"  # only the baseline works with cuda (yet), switching btw. cuda and cpu does not make a huge diff.
+
     logger.info(f"Using device: {device}")
     logger.info(f"Training model type: {args.model} for {args.total_episodes} episodes.")
+    if args.debug:
+        logger.info("***** DEBUG MODE ENABLED *****")
 
     # create the pool of parallel environments
     env = make_vec_env(
@@ -87,7 +92,7 @@ def main():
     logger.info(f"Detected horizon (H): {H}")
 
     state_dim = env.observation_space.shape[0]
-    n_actions = env.action_space.n
+    n_actions = int(env.action_space.n)
 
 
 
@@ -121,15 +126,20 @@ def main():
     if args.model == "ensemble":
         config["n_models"] = args.n_models
 
-    agent = AgentClass(
-        state_dim,
-        n_actions,
-        config,
-        network=NetworkClass,
-        device=device,
-        logger=logger,
-        tb_logger=tb_logger
-    )
+    agent_kwargs = {
+        "state_dim": state_dim,
+        "n_actions": n_actions,
+        "config": config,
+        "network": NetworkClass,
+        "device": device,
+        "logger": logger,
+        "tb_logger": tb_logger
+    }
+
+    if args.model == "bnn":
+        agent_kwargs["debug"] = args.debug
+
+    agent = AgentClass(**agent_kwargs)
 
     # set the training mode if the agent supports it
     if hasattr(agent, "set_training_mode"):
@@ -138,7 +148,7 @@ def main():
 
     # ----- training logic starts here -----
     n_episodes = 0
-    global_step = 0  # <-- NEW: counts every environment step
+    global_step = 0
     total_rewards_per_env = np.zeros(args.num_envs)
     total_costs_per_env = np.zeros(args.num_envs)
     start_time = time.time()
