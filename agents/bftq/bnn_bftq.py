@@ -6,7 +6,7 @@ from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import ClippedAdam
 from pyro.infer.autoguide import AutoDiagonalNormal
 
-from agents.bftq.bftq import BFTQ
+from agents.bftq.bftq_for_bnn import BFTQ
 
 class BNNBFTQ(BFTQ):
     def __init__(self, q_net, target_net, replay_buffer, config, device="cpu", logger=None, tb_logger=None, debug=False):
