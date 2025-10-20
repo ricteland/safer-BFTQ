@@ -211,13 +211,14 @@ def main():
                 tb_logger.log_scalar("episode/total_pred_cost", total_costs_per_env[i], n_episodes)
                 tb_logger.log_scalar("episode/last_beta_old", old_beta_list[i], n_episodes)
                 tb_logger.log_scalar("episode/last_beta_new", new_beta_list[i], n_episodes)
+                tb_logger.log_scalar("episode/initial_beta", betas[i], n_episodes)
 
                 # Minimal console output
                 logger.info(
                     f"Episode {n_episodes}/{args.total_episodes} | "
                     f"Reward: {total_rewards_per_env[i]:.3f} | "
                     f"Pred cost: {total_costs_per_env[i]:.3f} | "
-                    f"Beta: {old_beta_list[i]:.3f} -> {new_beta_list[i]:.3f}"
+                    f"Init beta: {betas[i]:.3f}"
                 )
 
                 # Reset episode counters
