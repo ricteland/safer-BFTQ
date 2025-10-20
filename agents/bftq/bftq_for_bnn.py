@@ -33,7 +33,9 @@ class BFTQ:
         reward = torch.tensor(reward, device=self.device).float()
         cost = torch.tensor(cost, device=self.device).float()
         beta = torch.tensor(beta, device=self.device).float().unsqueeze(1)
-        done = torch.tensor(done, device=self.device).float()
+        # done = torch.tensor(done, device=self.device).float()
+        done = torch.tensor(np.array(done), dtype=torch.float, device=self.device)
+
         state = state.view(state.size(0), -1)  # [batch, state_dim]
         next_state = next_state.view(next_state.size(0), -1)
         # --- forward pass ---
@@ -55,7 +57,6 @@ class BFTQ:
             q_r = q_r_mean.gather(1, action.unsqueeze(1)).squeeze()
             q_c = q_c_mean.gather(1, action.unsqueeze(1)).squeeze()
 
-            # NOTE: std is available if you want to use it in loss or exploration
             q_r_uncertainty = q_r_std.gather(1, action.unsqueeze(1)).squeeze()
             q_c_uncertainty = q_c_std.gather(1, action.unsqueeze(1)).squeeze()
 
