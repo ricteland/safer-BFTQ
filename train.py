@@ -6,7 +6,8 @@ import torch
 import argparse
 import numpy as np
 import gymnasium as gym
-
+import os
+import datetime
 # Environment
 import highway_env
 
@@ -244,7 +245,11 @@ def main():
     env.close()
     tb_logger.close()
 
-    save_path = f"model_weights/{args.model}_bftq_model.pt"
+    # === Dynamic save path ===
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    os.makedirs("model_weights", exist_ok=True)
+    save_path = f"model_weights/{args.model}_bftq_model_{timestamp}.pt"
+
     agent.save_model(save_path)
     logger.info(f"Model saved to {save_path}")
 
