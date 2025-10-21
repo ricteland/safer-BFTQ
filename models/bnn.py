@@ -12,7 +12,7 @@ class BayesianQNet(PyroModule):
     def __init__(self, size_state, n_actions, layers=[64, 64]):
         super().__init__()
         self.size_state = size_state
-        self.n_actions = n_actions
+        self.n_actions = int(n_actions)
 
         self.debug = False
 

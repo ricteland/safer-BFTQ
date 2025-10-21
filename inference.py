@@ -13,6 +13,7 @@ from models.bnn import BayesianQNet
 from models.mc_dropout import MCDropoutQNet
 from models.ensemble import EnsembleQNet
 from utils.logger import configure_logger
+from gymnasium.wrappers import FlattenObservation
 
 AGENT_MAP = {
     "bftq": (BFTQAgent, BudgetedQNet),
@@ -35,6 +36,7 @@ def main():
     logger = configure_logger(f'{args.model_type}_inference')
 
     env = gym.make(args.env, render_mode="human")
+    env = FlattenObservation(env)
     state_dim = env.observation_space.shape[0]
     n_actions = env.action_space.n
 
