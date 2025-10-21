@@ -1,4 +1,6 @@
 import argparse
+import time
+
 import highway_env
 import gymnasium as gym
 import numpy as np
@@ -11,7 +13,6 @@ from models.bnn import BayesianQNet
 from models.mc_dropout import MCDropoutQNet
 from models.ensemble import EnsembleQNet
 from utils.logger import configure_logger
-
 
 AGENT_MAP = {
     "bftq": (BFTQAgent, BudgetedQNet),
@@ -77,6 +78,7 @@ def main():
             total_reward += reward
 
             env.render()
+            time.sleep(0.08)
 
         all_total_rewards.append(total_reward)
         logger.info(f"Episode {ep}, total reward: {total_reward}")
