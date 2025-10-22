@@ -65,7 +65,10 @@ def main():
 
     parser.add_argument("--debug", action="store_true", help="Enable detailed debug prints.")
 
-    parser.add_argument("-logdir", type=str, default='logs')
+    parser.add_argument("--logdir", type=str, default='logs')
+
+    parser.add_argument("--env-id", type=str, default="two-way-v0", help="The ID of the highway-env environment to use.")
+    parser.add_argument("--run-name", type=str, required=True, help="A unique name for the run, used for the TensorBoard log directory.")
 
     args = parser.parse_args()
 
@@ -75,7 +78,9 @@ def main():
 
     os.makedirs(args.logdir, exist_ok=True)
 
-    tb_logger = TensorBoardLogger(log_dir=f"{args.logdir}/tensorboard_{args.model}")
+    # tb_logger = TensorBoardLogger(log_dir=f"{args.logdir}/tensorboard_{args.model}")
+    tb_logger = TensorBoardLogger(log_dir=f"{args.logdir}/{args.run_name}")
+
 
     device = "cpu"  # only the baseline works with cuda (yet), switching btw. cuda and cpu does not make a huge diff.
 
@@ -86,7 +91,7 @@ def main():
 
     # create the pool of parallel environments
     env = make_vec_env(
-        "two-way-v0",
+        args.env_id,
         n_envs=args.num_envs,
         vec_env_cls=SubprocVecEnv,
         wrapper_class=FlattenObservation  # ensure input to agent is 1d
@@ -94,7 +99,7 @@ def main():
 
     # Environment horizon (episode length)
     #H = env.get_attr("config")[0]["duration"]
-    H=10
+    H=15
     logger.info(f"Detected horizon (H): {H}")
 
     state_dim = env.observation_space.shape[0]
