@@ -91,10 +91,12 @@ def main():
         vec_env_cls=SubprocVecEnv,
         wrapper_class=FlattenObservation  # ensure input to agent is 1d
     )
+    # Set duration to 15 seconds for all sub-environments
+    env.set_attr("config", [{"duration": 15} for _ in range(args.num_envs)])
 
     # Environment horizon (episode length)
     #H = env.get_attr("config")[0]["duration"]
-    H=10
+    H=15
     logger.info(f"Detected horizon (H): {H}")
 
     state_dim = env.observation_space.shape[0]
