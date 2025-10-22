@@ -7,7 +7,7 @@ import argparse
 import numpy as np
 import gymnasium as gym
 import os
-import datetime
+from datetime import datetime
 # Environment
 import highway_env
 
@@ -65,12 +65,17 @@ def main():
 
     parser.add_argument("--debug", action="store_true", help="Enable detailed debug prints.")
 
+    parser.add_argument("-logdir", type=str, default='logs')
+
     args = parser.parse_args()
 
     #  setup & config
     model_name_upper = args.model.upper()
     logger = configure_logger(f'{model_name_upper}_BFTQ_train')
-    tb_logger = TensorBoardLogger(log_dir=f"logs/tensorboard_{args.model}")
+
+    os.makedirs(args.logdir, exist_ok=True)
+
+    tb_logger = TensorBoardLogger(log_dir=f"{args.logdir}/tensorboard_{args.model}")
 
     device = "cpu"  # only the baseline works with cuda (yet), switching btw. cuda and cpu does not make a huge diff.
 
@@ -81,7 +86,7 @@ def main():
 
     # create the pool of parallel environments
     env = make_vec_env(
-        "highway-v0",
+        "two-way-v0",
         n_envs=args.num_envs,
         vec_env_cls=SubprocVecEnv,
         wrapper_class=FlattenObservation  # ensure input to agent is 1d

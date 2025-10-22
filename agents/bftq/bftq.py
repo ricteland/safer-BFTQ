@@ -33,7 +33,9 @@ class BFTQ:
         reward = torch.tensor(reward, device=self.device).float()
         cost = torch.tensor(cost, device=self.device).float()
         beta = torch.tensor(beta, device=self.device).float().unsqueeze(1)
-        done = torch.tensor(done, device=self.device).float()
+        # done = torch.tensor(done, device=self.device).float()
+        done = torch.tensor(np.array(done), dtype=torch.float, device=self.device)
+
         state = state.view(state.size(0), -1)  # [batch, state_dim]
         next_state = next_state.view(next_state.size(0), -1)
         # --- forward pass ---
