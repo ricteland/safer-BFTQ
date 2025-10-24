@@ -59,13 +59,19 @@ def main():
     parser.add_argument("--n-samples", type=int, default=10)
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--logdir", type=str, default="logs")
+
+    parser.add_argument("--env-id", type=str, default="two-way-v0", help="The ID of the highway-env environment to use.")
+    parser.add_argument("--run-name", type=str, required=True, help="A unique name for the run, used for the TensorBoard log directory.")
     args = parser.parse_args()
+
 
     # === Setup ===
     model_name_upper = args.model.upper()
     logger = configure_logger(f"{model_name_upper}_BFTQ_train")
     os.makedirs(args.logdir, exist_ok=True)
-    tb_logger = TensorBoardLogger(log_dir=f"{args.logdir}/tensorboard_{args.model}")
+
+
+    tb_logger = TensorBoardLogger(log_dir=f"{args.logdir}/{args.run_name}")
     device = "cpu"
 
     logger.info(f"Using device: {device}")
@@ -78,12 +84,12 @@ def main():
         return FlattenObservation(LaneInfoWrapper(env))
 
     env = make_vec_env(
-        "two-way-v0",
+        args.env_id,
         n_envs=args.num_envs,
         vec_env_cls=SubprocVecEnv,
         wrapper_class=_wrap,
     )
-
+    
     # Dynamic horizon H = duration * simulation_frequency
     H = 200
     logger.info(f"Horizon (H) = {H}")
