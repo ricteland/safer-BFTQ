@@ -1,6 +1,5 @@
 import argparse
 import time
-
 import os
 import datetime
 import highway_env
@@ -25,36 +24,34 @@ AGENT_MAP = {
 }
 
 
-def compute_cost(info, horizon):
+def compute_cost(info, H):
     """
-    Compute safety cost per time step, following the paper's approach.
-
-    Cost = 1/H whenever the ego-vehicle is 'unsafe':
-      - crashed = True, or
-      - not driving in right lane (right_lane_reward < 1).
+    Cost = 1/H whenever the ego-vehicle drives on the top lane (lane_id == 0)
+    or crashes. Matches the safety definition in the BFTQ paper.
     """
-    # Safety cost = 1/H if crashed or off right lane
     crashed = info.get("crashed", False)
-    right_lane = info["rewards"].get("right_lane_reward", 1.0)
+    ego_vehicle = info.get("ego_vehicle", None)
+    on_wrong = False
 
-    if crashed or right_lane < 1.0:
-        return 1.0 / horizon
-    else:
-        return 0.0
+    if ego_vehicle is not None and hasattr(ego_vehicle, "lane_index"):
+        _, _, lane_id = ego_vehicle.lane_index
+        on_wrong = lane_id == 0  # top/left lane → opposite direction
+
+    return (1.0 / H) if (crashed or on_wrong) else 0.0
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-type", type=str, default="bftq", help="The type of model to load (bftq, bnn, mc, ensemble)")
+    parser.add_argument("--model-type", type=str, default="bftq",
+                        help="The type of model to load (bftq, bnn, mc, ensemble)")
     parser.add_argument("--model-path", type=str, required=True, help="The path to the trained model")
     parser.add_argument("--n-episodes", type=int, default=10, help="The number of episodes to run")
     parser.add_argument("--env", type=str, default="merge-v0", help="The environment to use")
-    parser.add_argument("--mode", type=str, default="pessimistic", help="The action selection mode (pessimistic or mean)")
+    parser.add_argument("--mode", type=str, default="pessimistic",
+                        help="The action selection mode (pessimistic or mean)")
     args = parser.parse_args()
 
-    # === Logger ===
-    model_name_upper = args.model_type.upper()
-    logger = configure_logger(f'{model_name_upper}_BFTQ_inference')
+    logger = configure_logger(f'{args.model_type.upper()}_BFTQ_inference')
     tb_logger = TensorBoardLogger(log_dir=f"logs/tensorboard_{args.model_type}_inference")
 
     env = gym.make(args.env, render_mode="human")
@@ -71,49 +68,58 @@ def main():
         "layers": [64, 64],
         "exploration": {"temperature": 0.0, "final_temperature": 0.0, "tau": 0},
         "hull_options": dict(library="scipy", decimals=2, remove_duplicates=True),
-        "k": 1.96, # Risk-aversion parameter
-        "dropout_p": 0.5, # Dropout probability
-        "n_samples": 10, # Number of samples for MC Dropout
-        "n_models": 5 # Number of models in the ensemble
+        "k": 1.96,
+        "dropout_p": 0.5,
+        "n_samples": 10,
+        "n_models": 5,
     }
 
     agent_class, network_class = AGENT_MAP[args.model_type]
-    state_dim = int(np.prod(env.observation_space.shape))
     agent = agent_class(state_dim, n_actions, config, network=network_class, device="cpu", logger=logger)
-
     agent.load_model(args.model_path)
 
     if hasattr(agent, "set_training_mode"):
         agent.set_training_mode(args.mode)
 
-    all_total_rewards = []
-    all_total_costs = []
+    all_total_rewards, all_total_costs = [], []
+    H = 600
     global_step = 0
-    H = env.get_attr("config")[0]["duration"]
 
     for ep in range(args.n_episodes):
         state, _ = env.reset()
         done = False
-        beta = np.random.uniform()
-        total_reward = 0
-        total_cost = 0
+
+        # Initialize the budget (beta) at the start of each episode
+        initial_budget = np.random.uniform()
+        beta = initial_budget  # Store initial budget
+        total_reward, total_env_cost, total_pred_cost = 0, 0, 0
+
+        # Log the initial budget
+        logger.info(f"Episode {ep}: Initial Budget (Beta) = {initial_budget:.4f}")
+        tb_logger.log_scalar("episode/initial_budget", initial_budget, ep)
 
         while not done:
             action, new_beta, q_r, q_c, old_beta = agent.act(state, beta)
             next_state, reward, terminated, truncated, info = env.step(action)
+
+            # attach ego vehicle for cost computation
+            info["ego_vehicle"] = env.unwrapped.vehicle
             cost = compute_cost(info, H)
+
             done = terminated or truncated
 
-            state = next_state
+            # Accumulate
             total_reward += reward
-            total_cost += cost
+            total_env_cost += cost
+            total_pred_cost += q_c  # <-- model-predicted cumulative cost
             beta = new_beta
+            state = next_state
 
-            # === Log to TensorBoard per step ===
+            # Logging
             tb_logger.log_scalar("step/reward", reward, global_step)
-            tb_logger.log_scalar("step/cost", cost, global_step)
             tb_logger.log_scalar("step/pred_qr", q_r, global_step)
             tb_logger.log_scalar("step/pred_qc", q_c, global_step)
+            tb_logger.log_scalar("step/env_cost", cost, global_step)
             tb_logger.log_scalar("step/beta_old", old_beta, global_step)
             tb_logger.log_scalar("step/beta_new", new_beta, global_step)
             global_step += 1
@@ -122,17 +128,18 @@ def main():
             time.sleep(0.08)
 
         all_total_rewards.append(total_reward)
-        all_total_costs.append(total_cost)
+        all_total_costs.append(total_pred_cost)
 
-        # === Log to TensorBoard per episode ===
         tb_logger.log_scalar("episode/total_reward", total_reward, ep)
-        tb_logger.log_scalar("episode/total_cost", total_cost, ep)
-        tb_logger.log_scalar("episode/initial_beta", beta, ep)
+        tb_logger.log_scalar("episode/predicted_total_cost", total_pred_cost, ep)
+        tb_logger.log_scalar("episode/env_total_cost", total_env_cost, ep)
 
-        logger.info(f"Episode {ep}, total reward: {total_reward:.2f}, total cost: {total_cost:.2f}")
+        logger.info(
+            f"Episode {ep}: reward={total_reward:.2f}, pred_cost={total_pred_cost:.4f}, env_cost={total_env_cost:.4f}, crashed={info.get('crashed', False)}, initial_budget={initial_budget:.4f}"
+        )
 
-    logger.info(f"Average total reward: {np.mean(all_total_rewards):.2f}")
-    logger.info(f"Average total cost: {np.mean(all_total_costs):.2f}")
+    logger.info(f"Average reward: {np.mean(all_total_rewards):.3f}")
+    logger.info(f"Average predicted cost: {np.mean(all_total_costs):.5f}")
     env.close()
     tb_logger.close()
 
