@@ -18,7 +18,6 @@ class MCDropoutQNet(nn.Module):
         for i in range(len(sizes) - 1):
             net_layers.append(nn.Linear(sizes[i], sizes[i+1]))
             net_layers.append(nn.ReLU())
-            net_layers.append(nn.Dropout(self.dropout_p))
         self.hidden = nn.Sequential(*net_layers)
 
         # output layer: reward+cost
@@ -27,8 +26,12 @@ class MCDropoutQNet(nn.Module):
     def forward(self, state, beta):
         # state: [B, state_dim], beta: [B, 1]
         x = torch.cat([state, beta], dim=-1)
-        h = self.hidden(x)
-        out = self.predict(h)          # [B, 2*n_actions]
+        h = x
+        for layer in self.hidden:
+            h = layer(h)
+            if isinstance(layer, nn.ReLU):
+                h = F.dropout(h, p=self.dropout_p, training=self.training)
+        out = self.predict(h)
         q_r = out[:, :self.size_action]
         q_c = out[:, self.size_action:]
         return q_r, q_c
