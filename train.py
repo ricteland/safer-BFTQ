@@ -250,7 +250,7 @@ def main():
     tb_logger.close()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     os.makedirs("model_weights", exist_ok=True)
-    save_path = f"model_weights/{args.model}_bftq_model_{timestamp}.pt"
+    save_path = f"model_weights/{args.model}_bftq_model_{timestamp}_{str(int(args.k*100))}.pt"
     agent.save_model(save_path)
     logger.info(f"Model saved to {save_path}")
 
