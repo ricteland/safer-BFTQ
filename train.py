@@ -36,15 +36,39 @@ class LaneInfoWrapper(Wrapper):
         return obs, reward, terminated, truncated, info
 
 
-def compute_cost(info, H):
+def compute_cost(info, H, env_id="two-way-v0"):
     """
-    BFTQ safety cost for two-way-v0:
-    cost = 1/H if crashed OR lane_id == 0 (opposite/top lane).
+    Compute safety cost for both two-way-v0 and highway-v0.
+
+    two-way-v0:
+        Cost = 1/H if crashed or lane_id == 0  (opposite lane)
+    highway-v0:
+        Cost = (rightmost - lane_id) * (1/H)  + crash cost
+        → rightmost = 3 → cost 0
+        → leftmost = 0 → cost 3/H
     """
     crashed = info.get("crashed", False)
-    lane_id = info.get("lane_id", None)
-    on_wrong_lane = (lane_id == 0)
-    return (1.0 / H) if (crashed or on_wrong_lane) else 0.0
+    ego_vehicle = info.get("ego_vehicle", None)
+
+    if ego_vehicle is not None and hasattr(ego_vehicle, "lane_index"):
+        _, _, lane_id = ego_vehicle.lane_index
+    else:
+        lane_id = None
+
+    if env_id == "two-way-v0":
+        on_wrong = (lane_id == 0)
+        return (1.0 / H) if (crashed or on_wrong) else 0.0
+
+    elif env_id == "highway-v0":
+        if lane_id is None:
+            return (1.0 / H) if crashed else 0.0
+        lane_cost = max(0, 3 - lane_id) * (1.0 / H)
+        crash_cost = (1.0 / H) if crashed else 0.0
+        return lane_cost + crash_cost
+
+    else:
+        # Default fallback
+        return (1.0 / H) if crashed else 0.0
 
 
 def main():
@@ -79,20 +103,30 @@ def main():
     if args.debug:
         logger.info("***** DEBUG MODE ENABLED *****")
 
-    # === Env setup (two-way-v0) with wrapper chain ===
+    # === Env setup with per-env config ===
     def _wrap(env):
         return FlattenObservation(LaneInfoWrapper(env))
+
+    env_config = {}
+    if args.env_id == "highway-v0":
+        env_config = {"duration": 15, "simulation_frequency": 15}
+    elif args.env_id == "two-way-v0":
+        env_config = {"simulation_frequency": 15}
 
     env = make_vec_env(
         args.env_id,
         n_envs=args.num_envs,
+        env_kwargs={"config": env_config},  # <<<<<<<<<<<< this line sets duration
         vec_env_cls=SubprocVecEnv,
         wrapper_class=_wrap,
     )
-    
+
     # Dynamic horizon H = duration * simulation_frequency
-    H = 200
-    logger.info(f"Horizon (H) = {H}")
+    if args.env_id == "highway-v0":
+        H = 15*15
+    else:
+        H = 40
+    print(f"H = {H} from {args.env_id}")
 
     state_dim = env.observation_space.shape[0]
     n_actions = int(env.action_space.n)
