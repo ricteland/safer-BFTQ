@@ -112,7 +112,7 @@ def main():
         done = False
 
         # Initialize the budget (beta) at the start of each episode
-        initial_budget = np.random.uniform(0.9, 1)
+        initial_budget = np.random.uniform()
         beta = initial_budget  # Store initial budget
         all_total_budgets.append(initial_budget)
         total_reward, total_env_cost, total_pred_cost = 0, 0, 0
