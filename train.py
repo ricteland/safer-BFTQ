@@ -48,12 +48,7 @@ def compute_cost(info, H, env_id="two-way-v0"):
         → leftmost = 0 → cost 3/H
     """
     crashed = info.get("crashed", False)
-    ego_vehicle = info.get("ego_vehicle", None)
-
-    if ego_vehicle is not None and hasattr(ego_vehicle, "lane_index"):
-        _, _, lane_id = ego_vehicle.lane_index
-    else:
-        lane_id = None
+    lane_id = info.get("lane_id", None)
 
     if env_id == "two-way-v0":
         on_wrong = (lane_id == 0)
@@ -68,6 +63,7 @@ def compute_cost(info, H, env_id="two-way-v0"):
 
     else:
         # Default fallback
+        print(f"WARNING: Unknown env_id {env_id}, using fallback cost function")
         return (1.0 / H) if crashed else 0.0
 
 
