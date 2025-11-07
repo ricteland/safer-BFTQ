@@ -1,9 +1,8 @@
-# train.py
-
 import time
 import argparse
 import numpy as np
 import os
+import json
 from datetime import datetime
 
 import gymnasium as gym
@@ -81,19 +80,46 @@ def main():
     parser.add_argument("--logdir", type=str, default="logs")
 
     parser.add_argument("--env-id", type=str, default="two-way-v0", help="The ID of the highway-env environment to use.")
-    parser.add_argument("--run-name", type=str, required=True, help="A unique name for the run, used for the TensorBoard log directory.")
+    parser.add_argument("--run-name", type=str, required=True, help="A unique name for the run, used for the experiment directory.")
     args = parser.parse_args()
 
-
     # === Setup ===
+    # self-contained experiment directory
+    exp_dir = os.path.join(args.logdir, args.run_name)
+    os.makedirs(exp_dir, exist_ok=True)
+
+    # we save all CLI arguments to a config file
+    config_path = os.path.join(exp_dir, "config.json")
+    with open(config_path, 'w') as f:
+        json.dump(vars(args), f, indent=4)
+
     model_name_upper = args.model.upper()
     logger = configure_logger(f"{model_name_upper}_BFTQ_train")
-    os.makedirs(args.logdir, exist_ok=True)
 
-
-    tb_logger = TensorBoardLogger(log_dir=f"{args.logdir}/{args.run_name}")
+    # TB logs are now saved inside the unique experiment directory
+    tb_logger = TensorBoardLogger(log_dir=exp_dir)
     device = "cpu"
 
+    # creates an entry in the HParams dashboard, final metrics will be added by the orchestrator script
+    hparams_to_log = {
+        'model': args.model,
+        'training_mode': args.training_mode,
+        'k': args.k,
+        'env_id': args.env_id,
+        'n_models': args.n_models if args.model == 'ensemble' else -1,
+        'dropout_p': args.dropout_p if args.model == 'mc' else -1,
+        'n_samples': args.n_samples if args.model in ['mc', 'bnn'] else -1,
+    }
+    # placeholders, actual values will be filled in after inference.
+    metric_dict = {
+        "hparam/avg_reward": 0,
+        "hparam/avg_cost": 0,
+        "hparam/avg_budget": 0
+    }
+    tb_logger.writer.add_hparams(hparams_to_log, metric_dict, run_name='hparams')
+
+
+    logger.info(f"Experiment directory: {exp_dir}")
     logger.info(f"Using device: {device}")
     logger.info(f"Training model: {args.model} | Episodes: {args.total_episodes}")
     if args.debug:
@@ -192,7 +218,7 @@ def main():
 
         # Store
         for i in range(args.num_envs):
-            cost = compute_cost(infos[i], H)
+            cost = compute_cost(infos[i], H, env_id=args.env_id)  # this was missing!
             agent.push_transition(states[i], actions[i], rewards[i], cost, betas[i], next_states[i], dones[i])
             total_rewards_per_env[i] += rewards[i]
             total_costs_per_env[i] += cost
@@ -244,9 +270,8 @@ def main():
     # Cleanup and save
     env.close()
     tb_logger.close()
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    os.makedirs("model_weights", exist_ok=True)
-    save_path = f"model_weights/{args.model}_bftq_model_{timestamp}_{str(int(args.k*100))}.pt"
+
+    save_path = os.path.join(exp_dir, "model.pt")
     agent.save_model(save_path)
     logger.info(f"Model saved to {save_path}")
 
